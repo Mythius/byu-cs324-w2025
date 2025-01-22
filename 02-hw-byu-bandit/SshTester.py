@@ -41,6 +41,7 @@ class Student:
         while True:
             line = f.readline()
             line_num += 1
+            print('here')
             if not line:
                 break
             if line.find("evel") != -1 or line.find("EVEL") != -1:

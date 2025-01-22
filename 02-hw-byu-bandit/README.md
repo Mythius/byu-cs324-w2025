@@ -4,7 +4,6 @@ The purpose of this assignment is to familiarize you with working in a shell
 environment, including redirection, pipelining, backgrounding, and more.  Read
 the entire assignment before beginning!
 
-
 # Maintain Your Repository
 
  Before beginning:
