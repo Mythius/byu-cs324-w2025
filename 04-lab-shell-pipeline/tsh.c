@@ -138,6 +138,8 @@ void eval(char *cmdline)
 			if(worked < 0){
 				fprintf(stderr,"Failed to create pipe\n");
 				exit(1);
+			} else {
+				// fprintf(stderr,"Created pipe [%d,%d]\n",next_pipe[0],next_pipe[1]);
 			}
 		}
 
@@ -147,6 +149,7 @@ void eval(char *cmdline)
 		}
 
 		if(fid > 0){ // TERMINAL CODE ONLY
+			// fprintf(stderr,"Created Child\n");
 			setpgid(fid,group_id);
 			if(i > 0){ // If there is a previous pipe close it for terminal
 				close(prev_pipe[0]);
@@ -167,6 +170,7 @@ void eval(char *cmdline)
 
 			if(i > 0){ // If not the first program, get input from previous pipe
 				// fprintf(stderr,"I am process %d, will read from fd:%d\n",i,prev_pipe[0]);
+				close(prev_pipe[1]);
 				dup2(prev_pipe[0],0);
 			}
 
@@ -205,13 +209,8 @@ void eval(char *cmdline)
 		}
 
 		if(send_to_background && mid==0){ // FAKE TERMINAL CODE ONLY
-			// fprintf(stderr,"Sending to background\n");
+			fprintf(stderr,"Sending to background\n");
 			exit(0);
-		}
-
-		
-		if(i > 0){ // clean up from last pipe (if there was a pipe)
-			close(prev_pipe[0]);
 		}
 
 
