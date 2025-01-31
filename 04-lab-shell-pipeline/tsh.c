@@ -1,7 +1,7 @@
 /* 
  * tsh - A tiny shell program with job control
  * 
- * <Put your name and login ID here>
+ * Matthias Southwick, south38
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,10 +12,12 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <fcntl.h> 
 
 /* Misc manifest constants */
 #define MAXLINE    1024   /* max line size */
 #define MAXARGS     128   /* max args on a command line */
+#define print		printf
 
 /* Global variables */
 extern char **environ;      /* defined in libc */
@@ -101,6 +103,74 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
+	char* argv[MAXARGS];
+
+	int cmds[MAXARGS];
+	int stdin_redir[MAXARGS];
+	int stdout_redir[MAXARGS];
+
+	int send_to_background = parseline(cmdline,argv);
+
+	int num_args = parseargs(argv,cmds,stdin_redir,stdout_redir);
+
+	for(int i=0;i<num_args;i++){
+		int code = builtin_cmd(&argv[cmds[i]]);
+		if(code != 0) return;
+
+		if(send_to_background){
+			int mid = fork();
+			if(mid > 0){
+				return;
+			}
+		}
+
+
+		int fid = fork();
+
+		// Create Pipes
+
+		if(fid == 0){
+			char *env_args[] = {NULL};
+
+			// Edit File Descriptors Here
+			if(stdin_redir[i] > 0){
+				int fd = open(argv[stdin_redir[i]],O_RDONLY);
+				if(fd < 0){
+					fprintf(stderr,"File %s couldn't be read\n",argv[stdin_redir[i]]);
+					exit(1);
+				} 
+				close(0);
+				dup2(fd,0);
+			}
+
+			if(stdout_redir[i] > 0){
+				int fd = open(argv[stdout_redir[i]],O_WRONLY | O_CREAT, 0600);
+				if(fd < 0){
+					exit(1);
+					fprintf(stderr,"File %s couldn't be created or opened\n",argv[stdin_redir[i]]);
+				}
+				close(1);
+				dup2(fd,1);
+			}
+
+			execve(argv[0],argv,env_args);
+			printf("%s not found.\n",argv[0]);
+			exit(0); // If error
+		}
+
+		if(send_to_background){
+			exit(0);
+		}
+
+		wait(0); // great for single command.
+
+
+
+	}
+
+	
+
+
 	return;
 }
 
@@ -228,6 +298,11 @@ int parseline(const char *cmdline, char **argv)
  */
 int builtin_cmd(char **argv) 
 {
+	if(strcmp(argv[0],"quit")==0){
+		exit(0);
+	}
+
+
 	return 0;     /* not a builtin command */
 }
 
