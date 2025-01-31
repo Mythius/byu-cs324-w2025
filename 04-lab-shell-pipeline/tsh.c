@@ -115,6 +115,8 @@ void eval(char *cmdline)
 
 	int prev_pipe[2] = {0,1}; // This values should never get used. Just using it to avoid warnings
 
+	int group_id = 0;
+
 	for(int i=0;i<num_args;i++){
 		int code = builtin_cmd(&argv[cmds[i]]);
 		if(code != 0) return;
@@ -140,8 +142,12 @@ void eval(char *cmdline)
 		}
 
 		int fid = fork(); // Create pipe and then Create Child.
+		if(i == 0 && fid > 0){
+			group_id = fid;
+		}
 
 		if(fid > 0){ // TERMINAL CODE ONLY
+			setpgid(fid,group_id);
 			if(i > 0){ // If there is a previous pipe close it for terminal
 				close(prev_pipe[0]);
 				// fprintf(stderr,"I am Terminal, closing PREVIOUS PIPE fd:%d for myself and future processes\n",next_pipe[0]);
