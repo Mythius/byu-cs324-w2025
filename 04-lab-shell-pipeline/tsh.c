@@ -113,62 +113,105 @@ void eval(char *cmdline)
 
 	int num_args = parseargs(argv,cmds,stdin_redir,stdout_redir);
 
+	int prev_pipe[2] = {0,1}; // This values should never get used. Just using it to avoid warnings
+
 	for(int i=0;i<num_args;i++){
 		int code = builtin_cmd(&argv[cmds[i]]);
 		if(code != 0) return;
 
+		int mid = 1;
 		if(send_to_background){
-			int mid = fork();
+			mid = fork();
 			if(mid > 0){
 				return;
 			}
 		}
 
 
-		int fid = fork();
+		int next_pipe[2];
 
 		// Create Pipes
+		if(i != num_args-1){ // no need to create a pipe for final program
+			int worked = pipe(next_pipe);
+			if(worked < 0){
+				fprintf(stderr,"Failed to create pipe\n");
+				exit(1);
+			}
+		}
 
-		if(fid == 0){
+		int fid = fork(); // Create pipe and then Create Child.
+
+		if(fid > 0){ // TERMINAL CODE ONLY
+			if(i > 0){ // If there is a previous pipe close it for terminal
+				close(prev_pipe[0]);
+				// fprintf(stderr,"I am Terminal, closing PREVIOUS PIPE fd:%d for myself and future processes\n",next_pipe[0]);
+			}
+			if(i != num_args-1){ 
+				close(next_pipe[1]); // Close Pipes from Terminal
+				// fprintf(stderr,"I am Terminal, closing fd:%d for myself and future processes\n",next_pipe[1]);
+				// fprintf(stderr,"I am Terminal, keeping fd:%d for myself and future processes\n",next_pipe[0]);
+				prev_pipe[0] = next_pipe[0];
+				prev_pipe[1] = next_pipe[1];
+			}
+		}
+
+
+		if(fid == 0){ // PROCESS CODE ONLY
 			char *env_args[] = {NULL};
 
+			if(i > 0){ // If not the first program, get input from previous pipe
+				// fprintf(stderr,"I am process %d, will read from fd:%d\n",i,prev_pipe[0]);
+				dup2(prev_pipe[0],0);
+			}
+
+			if(i != num_args-1){ // If not the last program setup to write to next pipe
+				close(next_pipe[0]); // Close read end
+				dup2(next_pipe[1],1); // Write to pipe
+				//fprintf(stderr,"I am process %d, will write to fd:%d\n",i,next_pipe[1]);
+				//fprintf(stderr,"I am process %d, will close to fd:%d\n",i,next_pipe[0]);
+			}
+
 			// Edit File Descriptors Here
-			if(stdin_redir[i] > 0){
+			if(stdin_redir[i] > 0){ // INPUT REDIRECTION <
 				int fd = open(argv[stdin_redir[i]],O_RDONLY);
 				if(fd < 0){
-					fprintf(stderr,"File %s couldn't be read\n",argv[stdin_redir[i]]);
+					// fprintf(stderr,"File %s couldn't be read\n",argv[stdin_redir[i]]);
 					exit(1);
 				} 
 				close(0);
 				dup2(fd,0);
 			}
 
-			if(stdout_redir[i] > 0){
+			if(stdout_redir[i] > 0){ // OUTPUT REDIRECTION >
 				int fd = open(argv[stdout_redir[i]],O_WRONLY | O_CREAT, 0600);
 				if(fd < 0){
 					exit(1);
-					fprintf(stderr,"File %s couldn't be created or opened\n",argv[stdin_redir[i]]);
+					// fprintf(stderr,"File %s couldn't be created or opened\n",argv[stdin_redir[i]]);
 				}
 				close(1);
 				dup2(fd,1);
 			}
 
-			execve(argv[0],argv,env_args);
-			printf("%s not found.\n",argv[0]);
+			// fprintf(stderr,"I am process %d, morphing into %s\n",i,argv[cmds[i]]);
+			execve(argv[cmds[i]],&argv[cmds[i]],env_args);
+			fprintf(stderr,"%s not found.\n",argv[cmds[i]]);
 			exit(0); // If error
 		}
 
-		if(send_to_background){
+		if(send_to_background && mid==0){ // FAKE TERMINAL CODE ONLY
+			// fprintf(stderr,"Sending to background\n");
 			exit(0);
 		}
 
-		wait(0); // great for single command.
-
+		
+		if(i > 0){ // clean up from last pipe (if there was a pipe)
+			close(prev_pipe[0]);
+		}
 
 
 	}
 
-	
+	for(int i=0;i<num_args;i++) wait(0); // great for single command.
 
 
 	return;
