@@ -150,11 +150,11 @@ void eval(char *cmdline)
 			setpgid(fid,group_id);
 			if(i > 0){ // If there is a previous pipe close it for terminal
 				close(prev_pipe[0]);
-				// fprintf(stderr,"I am Terminal, closing PREVIOUS PIPE fd:%d for myself and future processes\n",next_pipe[0]);
+				close(prev_pipe[1]); // Close Pipes from Terminal
+				// fprintf(stderr,"I am Terminal, closing PREVIOUS PIPE fd:%d for myself and future processes\n",prev_pipe[0]);
+				// fprintf(stderr,"I am Terminal, closing PREVIOUS PIPE fd:%d for myself and future processes\n",prev_pipe[1]);
 			}
 			if(i != num_args-1){ 
-				close(next_pipe[1]); // Close Pipes from Terminal
-				// fprintf(stderr,"I am Terminal, closing fd:%d for myself and future processes\n",next_pipe[1]);
 				// fprintf(stderr,"I am Terminal, keeping fd:%d for myself and future processes\n",next_pipe[0]);
 				prev_pipe[0] = next_pipe[0];
 				prev_pipe[1] = next_pipe[1];
@@ -173,8 +173,8 @@ void eval(char *cmdline)
 			if(i != num_args-1){ // If not the last program setup to write to next pipe
 				close(next_pipe[0]); // Close read end
 				dup2(next_pipe[1],1); // Write to pipe
-				//fprintf(stderr,"I am process %d, will write to fd:%d\n",i,next_pipe[1]);
-				//fprintf(stderr,"I am process %d, will close to fd:%d\n",i,next_pipe[0]);
+				// fprintf(stderr,"I am process %d, will write to fd:%d\n",i,next_pipe[1]);
+				// fprintf(stderr,"I am process %d, will close to fd:%d\n",i,next_pipe[0]);
 			}
 
 			// Edit File Descriptors Here
