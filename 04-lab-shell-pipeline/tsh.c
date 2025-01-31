@@ -193,7 +193,11 @@ void eval(char *cmdline)
 			}
 
 			if(stdout_redir[i] > 0){ // OUTPUT REDIRECTION >
-				int fd = open(argv[stdout_redir[i]],O_WRONLY | O_CREAT, 0600);
+				int fd = open(argv[stdout_redir[i]],O_RDWR | O_CREAT, 0600);
+				int truncated = ftruncate(fd,0);
+				if(truncated == -1){
+					fprintf(stderr,"Error truncating File\n");
+				}
 				if(fd < 0){
 					exit(1);
 					// fprintf(stderr,"File %s couldn't be created or opened\n",argv[stdin_redir[i]]);
