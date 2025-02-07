@@ -44,9 +44,9 @@ int main(int argc, char *argv[]) {
 		break;
 	case '3':
 		kill(pid,SIGHUP);
-		sleep(4);
-		kill(pid,SIGHUP);
 		sleep(1);
+		kill(pid,SIGHUP);
+		sleep(5);
 		kill(pid,12);
 		sleep(1);
 		kill(pid,SIGTERM);
