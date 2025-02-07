@@ -28,24 +28,92 @@ int main(int argc, char *argv[]) {
 
 	switch (scenario[0]) {
 	case '0':
+		kill(pid,SIGHUP);
 		break;
 	case '1':
+		kill(pid,12);
+		sleep(1);
+		kill(pid,SIGTERM);
 		break;
 	case '2':
+		kill(pid,SIGHUP);
+		sleep(4);
+		kill(pid,12);
+		sleep(1);
+		kill(pid,SIGTERM);
 		break;
 	case '3':
+		kill(pid,SIGHUP);
+		sleep(4);
+		kill(pid,SIGHUP);
+		sleep(1);
+		kill(pid,12);
+		sleep(1);
+		kill(pid,SIGTERM);
 		break;
 	case '4':
+		kill(pid,12);
+		kill(pid,SIGHUP);
+		sleep(1);
+		kill(pid,SIGINT);
+		sleep(8);
+		kill(pid,12);
+		sleep(1);
+		kill(pid,SIGTERM);
 		break;
 	case '5':
+		kill(pid, 12);
+		kill(pid,SIGHUP);
+		sleep(1);
+		kill(pid,SIGTERM);
 		break;
 	case '6':
+		kill(pid,SIGHUP);
+		sleep(5);
+		kill(pid,10);
+		sleep(1);
+		kill(pid,16);
+		sleep(1);
+		kill(pid,12);
+		sleep(1);
+		kill(pid,SIGTERM);
 		break;
 	case '7':
+		kill(pid,SIGHUP);
+		sleep(5);
+		kill(pid,10);
+		sleep(1);
+		kill(pid,12);
+		sleep(1);
+		kill(pid,SIGTERM);
 		break;
 	case '8':
+		kill(pid,31);
+		sleep(1);
+		kill(pid,SIGHUP);
+		sleep(5);
+		kill(pid,10);
+		sleep(1);
+		kill(pid,30);
+		sleep(1);
+		kill(pid,SIGTERM);
+		sleep(1);
+		kill(pid,12);
+		sleep(1);
+		kill(pid,SIGTERM);
 		break;
-	case '9': 
+	case '9':
+		kill(pid,12);
+		sleep(1);
+		kill(pid,31);
+		sleep(1);
+		kill(pid,SIGQUIT);
+		sleep(5);
+		kill(pid,31);
+		sleep(1);
+		kill(pid,12);
+		sleep(1);
+		kill(pid,SIGTERM);
 		break;
 
 	}
