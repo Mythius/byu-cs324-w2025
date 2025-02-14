@@ -165,6 +165,49 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
+	char* argv[MAXARGS];
+	int in_bg = parseline(cmdline,argv);
+
+	if(builtin_cmd(argv)) return;
+
+	// BLOCK SIGCHLD, SIGINT, SGSTP
+	sigset_t newMask, oldMask;
+	sigemptyset(&newMask);
+	sigemptyset(&oldMask);
+
+	sigaddset(&newMask,SIGCHLD | SIGINT | SIGSTOP);
+	sigprocmask(SIG_BLOCK, &newMask, &oldMask);
+	// ###########################
+
+	int value = fork();
+	if(value == -1){
+		fprintf(stderr,"Unable to fork\n");
+		return;
+	}
+
+	if(value == 0){
+		// CHILD
+		char *env_args[] = {NULL};
+		sigprocmask(SIG_SETMASK,&oldMask,NULL);
+		setpgid(getpid(),getpid());
+
+		execve(argv[0],argv,env_args);
+		printf("%s: Command not found\n",argv[0]);
+		exit(0);
+	} else {
+
+		addjob(jobs,value,in_bg ? BG : FG,cmdline);
+		sigprocmask(SIG_SETMASK,&oldMask,NULL);
+
+		if(!in_bg){
+			waitfg(value);
+		} else {
+			struct job_t* job = getjobpid(jobs,value);
+			printf("[%d] (%d) %s",job->jid,job->pid,job->cmdline);
+		}
+	}
+
+
 	return;
 }
 
@@ -229,8 +272,20 @@ int parseline(const char *cmdline, char **argv)
  * builtin_cmd - If the user has typed a built-in command then execute
  *    it immediately.  
  */
-int builtin_cmd(char **argv) 
-{
+int builtin_cmd(char **argv) {	
+	if(strcmp(argv[0],"quit")==0) {
+		exit(0);
+	}
+
+	if(strcmp(argv[0],"fg") == 0 || strcmp(argv[0],"bg") == 0){
+		do_bgfg(argv);
+		return 1;
+	}
+
+	if(strcmp(argv[0],"jobs") == 0){
+		listjobs(jobs);
+		return 1;
+	}
 	return 0;     /* not a builtin command */
 }
 
@@ -239,6 +294,54 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv) 
 {
+	if(!argv[1]){
+		printf("%s command requires PID or %%jobid argument\n",argv[0]); 
+		return;
+	}
+	int is_job = argv[1][0] == '%';
+	int id;
+	struct job_t* job;
+	if(!is_job){
+		id = atoi(argv[1]);
+		if(id == 0){
+			printf("%s: argument must be a PID or %%jobid\n",argv[0]);
+			return;
+		}
+		if(verbose) printf("Sending SIGCONT to group %d\n",id);
+		if(kill(-id,SIGCONT) == -1){
+			printf("(%d): No such process\n",id);
+			return;
+		}
+		job = getjobpid(jobs,id);
+	} else {
+		char* input = argv[1];
+		input++;
+		int jobid = atoi(input);
+		if(jobid == 0){
+			printf("%s: argument must be a PID or %%jobid\n",argv[0]);
+			return;
+		}
+		job = getjobjid(jobs,jobid);
+		if(job == NULL){
+			printf("%s: No such job\n",argv[1]);
+			return;
+		}
+		id = job->pid;
+		if(verbose) printf("Sending SIGCONT to group %d\n",id);
+		if(kill(-id,SIGCONT) == -1){
+			printf("(%d): No such process\n",id);
+			return;
+		}
+	}
+	
+	if(strcmp(argv[0],"fg")==0){
+		job->state = FG;
+		waitfg(id);
+	} else if(strcmp(argv[0],"bg")==0){
+		job->state = BG;
+		printf("[%d] (%d) %s",job->jid,job->pid,job->cmdline);
+	}
+
 	return;
 }
 
@@ -247,6 +350,11 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
+	while(1){
+		if(!getjobpid(jobs,pid)) break;
+		if(getjobpid(jobs,pid)->state != FG) break;
+		sleep(1);
+	}
 	return;
 }
 
@@ -263,6 +371,27 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig) 
 {
+	if(verbose) printf("sigchild_hanlder code\n");
+
+	int status;
+	int ret_val;
+	while((ret_val = waitpid(-1,&status, WUNTRACED | WNOHANG)) > 0){
+		if(WIFSIGNALED(status)){
+			printf("Job [%d] (%d) terminated by signal %d\n",getjobpid(jobs,ret_val)->jid,ret_val,WTERMSIG(status));
+			deletejob(jobs,ret_val);
+		} else if (WIFEXITED(status)){
+			deletejob(jobs,ret_val);
+		} else if (WIFSTOPPED(status)) {
+			struct job_t* job = getjobpid(jobs,ret_val);
+			if(!job) continue;
+			printf("Job [%d] (%d) stopped by signal %d\n",getjobpid(jobs,ret_val)->jid,ret_val,WSTOPSIG(status));
+			job->state = ST;
+		} else if (WIFCONTINUED(status)){
+			// Possibly handle here?
+		}
+	}
+
+
 	return;
 }
 
@@ -273,6 +402,14 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) 
 {
+	if (verbose)
+		printf("sigint_handler: entering\n");
+
+	int p = fgpid(jobs);
+	if(p){
+		kill(-p,SIGINT);
+	}
+
 	return;
 }
 
@@ -283,6 +420,10 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
+	int p = fgpid(jobs);
+	if(p){
+		kill(-p,20);
+	}
 	return;
 }
 
