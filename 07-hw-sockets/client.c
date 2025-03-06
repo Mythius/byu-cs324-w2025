@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
 	// was passed in on the command line.
 	hints.ai_family = af;
 	// Use type SOCK_DGRAM (UDP)
-	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_socktype = SOCK_STREAM;
 
 
 	/* SECTION A - pre-socket setup; getaddrinfo() */
@@ -155,36 +155,53 @@ int main(int argc, char *argv[]) {
 
 	// Send remaining command-line arguments as separate
 	// datagrams, and read responses from server.
-	for (int j = hostindex + 2; j < argc; j++) {
-		// buf will hold the bytes we read from the socket.
-		char buf[BUF_SIZE];
+	// buf will hold the bytes we read from the socket.
+	char buf[16384];
 
-		// len includes the count of all characters comprising the
-		// null-terminated string argv[j], but not the null byte
-		// itself.
-		size_t len = strlen(argv[j]);
-		if (len > BUF_SIZE) {
-			fprintf(stderr,
-					"Ignoring long message in argument %d\n", j);
-			continue;
-		}
+	// len includes the count of all characters comprising the
+	// null-terminated string argv[j], but not the null byte
+	// itself.
+	int r = read(0,buf,16384);
+	int total = 0;
+	while(r != 0){
+		r = read(0,buf,512);
+		r += total;
+		if(r > 16384) break;
+	}
+	// write(1,buf,strlen(buf));
+	// sleep(3);
+	int len = strlen(buf);
+	// printf("Sending: %s\n",buf);
+	ssize_t nwritten = send(sfd, buf, len, 0);
+	// ssize_t nwritten = sendto(sfd, argv[j], len, 0, remote_addr, addr_len);
+	if (nwritten < 0) {
+		perror("send");
+		exit(EXIT_FAILURE);
+	}
 
-		ssize_t nwritten = send(sfd, argv[j], len, 0);
-		if (nwritten < 0) {
-			perror("send");
-			exit(EXIT_FAILURE);
-		}
-		printf("Sent %zd bytes: %s\n", len, argv[j]);
+	// close(sfd);
+	// printf("Sent %zd bytes: %s\n", len, buf);
+	// fflush(0);
 
-		ssize_t nread = recv(sfd, buf, BUF_SIZE, 0);
-		buf[nread] = '\0';
-		if (nread < 0) {
-			perror("read");
-			exit(EXIT_FAILURE);
-		}
-
-		printf("Received %zd bytes: %s\n", nread, buf);
-
+	// ssize_t nread = recv(sfd, buf, BUF_SIZE, 0);
+	// buf[nread] = '\0';
+	// if (nread < 0) {
+	// 	perror("read");
+	// 	exit(EXIT_FAILURE);
+	// }
+	// printf("\n\n\n");
+	// printf("Received %zd bytes: %s\n", nread, buf);
+	char buf2[16384];
+	total = 0;
+	r = recv(sfd,buf2,512,0);
+	total += r;
+	// printf("Recieved %d bytes\n",r);
+	write(1,buf2,r);
+	while(r != 0){
+		r = recv(sfd,buf2,512,0);
+		// printf("Recieved %d bytes\n",r);
+		write(1,buf2,r);
+		total += r;
 	}
 
 	exit(EXIT_SUCCESS);
