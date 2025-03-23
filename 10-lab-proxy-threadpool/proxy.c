@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "sockhelper.h"
+#include <string.h>
 
 /* Recommended max object size */
 #define MAX_OBJECT_SIZE 102400
@@ -21,11 +22,59 @@ int main(int argc, char *argv[])
 }
 
 int complete_request_received(char *request) {
-	return 0;
+	return strstr(request,"\r\n\r\n") == NULL ? 0 : 1;
 }
 
-void parse_request(char *request, char *method,
-		char *hostname, char *port, char *path) {
+
+void parse_request(char *request, char *method, char *hostname, char *port, char *path) {
+    // Extract the method
+    char *first_space = strstr(request, " ");
+    strncpy(method, request, first_space - request);
+    method[first_space - request] = '\0';  // Null-terminate the method string
+
+    // Extract the URL
+    char *second_space = strstr(first_space + 1, " ");
+    char url[1024];
+    strncpy(url, first_space + 1, second_space - first_space - 1);
+    url[second_space - first_space - 1] = '\0';
+
+    // Extract the headers (if needed)
+    // Here, we're only using the URL, so headers are ignored as per the lab
+
+    // Parse the URL components
+    char *host_start = strstr(url, "://");
+    if (host_start) {
+        host_start += 3;  // Skip past "://"
+    } else {
+        host_start = url;  // No "://", assume it's the hostname directly
+    }
+
+    char *port_start = strstr(host_start, ":");
+    char *path_start = strstr(host_start, "/");
+
+    if (port_start && (!path_start || port_start < path_start)) {
+        // Port is specified
+        strncpy(hostname, host_start, port_start - host_start);
+        hostname[port_start - host_start] = '\0';
+
+        strncpy(port, port_start + 1, path_start - port_start - 1);
+        port[path_start - port_start - 1] = '\0';
+    } else {
+        // No port specified, default to 80
+        if (path_start) {
+            strncpy(hostname, host_start, path_start - host_start);
+            hostname[path_start - host_start] = '\0';
+        } else {
+            strcpy(hostname, host_start);
+        }
+        strcpy(port, "80");
+    }
+
+    if (path_start) {
+        strcpy(path, path_start);
+    } else {
+        strcpy(path, "/");  // Default path if not specified
+    }
 }
 
 void test_parser() {
