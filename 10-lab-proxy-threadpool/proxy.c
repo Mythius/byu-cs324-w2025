@@ -2,6 +2,11 @@
 
 #include "sockhelper.h"
 #include <string.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <arpa/inet.h>
 
 /* Recommended max object size */
 #define MAX_OBJECT_SIZE 102400
@@ -12,13 +17,23 @@ int complete_request_received(char *);
 void parse_request(char *, char *, char *, char *, char *);
 void test_parser();
 void print_bytes(unsigned char *, int);
-
+void handle_client(int);
+int open_sfd( int );
 
 int main(int argc, char *argv[])
 {
-	test_parser();
-	printf("%s\n", user_agent_hdr);
-	return 0;
+
+	char *last_arg = argv[argc - 1];
+    int port = atoi(last_arg); 
+
+	int sfd = open_sfd(port);
+	while(1){
+		struct sockaddr_storage local_addr_ss;
+		struct sockaddr *local_addr = (struct sockaddr *)&local_addr_ss;
+		socklen_t addr_len = sizeof(struct sockaddr_storage);
+		int client = accept(sfd, local_addr, &addr_len);
+		handle_client(client);
+	}
 }
 
 int complete_request_received(char *request) {
@@ -156,4 +171,94 @@ void print_bytes(unsigned char *bytes, int byteslen) {
 	}
 	printf("\n");
 	fflush(stdout);
+}
+
+int open_sfd( int port ){
+
+	int sfd = socket(AF_INET,SOCK_STREAM,0);	
+	if( sfd < 0 ){
+		fprintf(stderr,"Couldn't create socket\n");
+		exit(1);
+	}
+
+	int optval = 1;
+	setsockopt(sfd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+
+    struct sockaddr_in local_addr;
+	local_addr.sin_family = AF_INET;
+	local_addr.sin_port = htons(port);
+	local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	
+	if(bind(sfd,(struct sockaddr *) &local_addr, sizeof(local_addr)) < 0){
+		fprintf(stderr,"Failed to bind\n");
+	}
+
+	if(listen(sfd,100) < 0){
+		fprintf(stderr,"Failed to Listen\n");
+	}
+
+	// printf("Listening on localhost port:%d\n",ntohs(local_addr.sin_port));
+
+	return sfd;
+
+}
+
+void handle_client(int client){
+	char buf[1024];
+	int writeto = 0;
+	while(!complete_request_received(buf)){
+		int r = read(client,&buf[writeto],1024);
+		writeto += r;
+		if(r == 0){
+			printf("Client Disconnected\n");
+			return;
+		}
+	}
+	
+	print_bytes((unsigned char *)buf,strlen(buf));
+
+	
+	char method[16], hostname[64], port[8], path[64];
+
+	
+	if (complete_request_received(buf)) {
+		printf("REQUEST COMPLETE\n");
+		parse_request(buf, method, hostname, port, path);
+		printf("METHOD: %s\n", method);
+		printf("HOSTNAME: %s\n", hostname);
+		printf("PORT: %s\n", port);
+		printf("PATH: %s\n", path);
+	} else {
+		printf("REQUEST INCOMPLETE\n");
+	}
+
+	char response[1024];
+	writeto = 0;
+	writeto += sprintf(&response[writeto],"%s http://",method);
+	
+	if( strcmp(port,"80") == 0){
+		writeto += sprintf(&response[writeto],"%s",hostname);
+	} else {
+		writeto += sprintf(&response[writeto],"%s:%s",hostname,port);
+	}
+
+	writeto += sprintf(&response[writeto],"%s HTTP/1.0\r\n",path);
+	
+	if( strcmp(port,"80") == 0){
+		writeto += sprintf(&response[writeto],"Host: %s\r\n",hostname);
+	} else {
+		writeto += sprintf(&response[writeto],"Host: %s:%s",hostname,port);
+	}
+
+	writeto += sprintf(&response[writeto],"%s\r\n",user_agent_hdr);
+	writeto += sprintf(&response[writeto],"%s\r\n","Connection: close");
+	writeto += sprintf(&response[writeto],"%s\r\n","Proxy-Connection: close");
+	writeto += sprintf(&response[writeto],"\r\n\r\n");
+
+
+	if(write(client,response,writeto) >= 0){
+		print_bytes((unsigned char *)response,writeto);
+	} else {
+		fprintf(stderr,"Response Not Sent\n");
+	}
 }
