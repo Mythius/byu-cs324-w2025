@@ -238,10 +238,6 @@ void handle_client(int efd, struct request_info *client){
 			close(client->servfd);
 		}
 
-		if (fcntl(client->servfd, F_SETFL, fcntl(client->servfd, F_GETFL, 0) | O_NONBLOCK) < 0) {
-			fprintf(stderr, "error setting socket option\n");
-			exit(1);
-		}
 		
 		struct epoll_event event;
 		event.data.ptr = client;
@@ -266,6 +262,12 @@ void handle_client(int efd, struct request_info *client){
 			close(client->servfd);
 			close(client->connfd);
 			return;
+		}
+
+		
+		if (fcntl(client->servfd, F_SETFL, fcntl(client->servfd, F_GETFL, 0) | O_NONBLOCK) < 0) {
+			fprintf(stderr, "error setting socket option\n");
+			exit(1);
 		}
 
 		if(send(client->servfd,client->buf,client->sbyteswritten,0) == -1){
